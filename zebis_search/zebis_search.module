@@ -1,0 +1,117 @@
+<?php
+
+define('ZEBIS_SEARCH_AUTOCOMPLETE_PATH', 'zebis_search_autocomplete');
+define('ZEBIS_SEARCH_AUTOCOMPLETE_MINLENGTH', 2);
+
+/**
+ * Implements hook_form_alter().
+ */
+function zebis_search_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'search_block_form':
+      $settings = array();
+      $settings['path'] = ZEBIS_SEARCH_AUTOCOMPLETE_PATH;
+      $settings['minlength'] = ZEBIS_SEARCH_AUTOCOMPLETE_MINLENGTH;
+      drupal_add_library('system', 'ui.autocomplete');
+      drupal_add_js(array('zebis_search' => array('settings_autocomplete' => $settings)), 'setting');
+
+      $form['search_block_form']['#attributes']['class'] = array('zebis_search_autocomplete');
+      if (arg(0) == 'search') {
+        $form['search_block_form']['#default_value'] = arg(2);
+      }
+      $form['#attached']['js'] = array(
+        drupal_get_path('module', 'zebis_search') . '/js/zebis_search.js',
+      );
+      break;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function zebis_search_menu() {
+  $items[ZEBIS_SEARCH_AUTOCOMPLETE_PATH] = array(
+    'page callback' => 'zebis_search_autocomplete_search',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Build the documents before sending them to Solr.
+ *
+ * Supports all types of
+ * hook_apachesolr_index_document_build_' . $entity_type($documents[$id], $entity, $env_id);
+ *
+ * The function is the follow-up for apachesolr_update_index but then for
+ * specific entity types
+ *
+ * @param $document
+ * @param $entity
+ */
+function zebis_search_apachesolr_index_document_build_node(ApacheSolrDocument $document, $entity, $env_id) {
+  //add field with edge_n2_kw_text
+  $document->addField('tes_title', $entity->title);
+  //$document->addField('tes_subtitle', $entity->field_article_subtitle[LANGUAGE_NONE][0]['value']);
+}
+
+function zebis_search_apachesolr_index_document_build_taxonomy_term(ApacheSolrDocument $document, $entity, $env_id) {
+  //add field with edge_n2_kw_text
+  $document->addField('tes_taxonomy_name', $entity->name);
+}
+
+/**
+ * Callback for autocomplete.
+ */
+function zebis_search_autocomplete_search() {
+  $term = trim($_GET['term']);
+  $params = array(
+    'q' => $term,
+    'qf' => array('tes_title' => 'tes_title', 'tes_taxonomy_name' => 'tes_taxonomy_name'),
+  );
+
+  $query = apachesolr_drupal_query('apachesolr', $params);
+  apachesolr_search_add_spellcheck_params($query);
+  list($final_query, $response) = apachesolr_do_query($query);
+
+  $nodes = zebis_search_format_apachesolr_results($response->response->docs);
+
+  return drupal_json_output($nodes);
+}
+
+/**
+ * Formating results from apachesolr.
+ * @param type $docs
+ */
+function zebis_search_format_apachesolr_results($docs = array()) {
+  if (empty($docs)) {
+    return FALSE;
+  }
+
+  $nodes = array();
+  foreach ($docs as $id => $doc) {
+    switch ($doc->entity_type) {
+      case 'taxonomy_term':
+
+        break;
+      case 'node':
+		  
+        break;
+    }
+    $nodes[$id]['label'] = $doc->label;
+    $nodes[$id]['value'] = $doc->label;
+    $nodes[$id]['url'] = $doc->url;
+    $nodes[$id]['id'] = $doc->entity_id;
+    $nodes[$id]['category'] = t($doc->bundle_name);
+    
+    
+  }
+  $nodes['all_res']['label'] = t('View more results...');
+  $nodes['all_res']['value'] = $_GET['term'];
+  $nodes['all_res']['category'] = FALSE;
+  $nodes['all_res']['url'] = 'all_res';
+
+  return $nodes;
+}
