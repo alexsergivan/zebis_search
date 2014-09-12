@@ -1,4 +1,4 @@
 zebis_search
 ============
 
-Creates autocomplete for search box
+Creates autocomplete for apache solr search box
